@@ -1,6 +1,8 @@
-This is a very preliminary implementation of PySonar, a
-static analyzer in Python. Please don't use.
+This is a very preliminary Python implementation of PySonar,
+a static analyzer. Please don't use.
 
-It was orginally implemented in Java. You can find its introduction at:
+It was orginally implemented in Java. You can find its
+introduction at:
+
 http://www.cs.indiana.edu/~yw21/pysonar.html
 
