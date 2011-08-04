@@ -346,6 +346,28 @@ class BindIterator:
 
 
 
+def stripType(t):
+    return union(map(lambda b: b.typ, t))
+
+
+
+def hasType(t, u):
+    for t2, loc in u:
+        if t == t2:
+            return True
+    return False
+
+
+
+def removeType(t, u):
+    ret = []
+    for t2, loc in u:
+        if t2 <> t:
+            ret.append(Bind(t2, loc))
+    return ret
+
+
+
 
 # combine two environments, make unions when necessary
 # only assocs appear in both envs are preserved
@@ -377,7 +399,7 @@ def bind(target, value, env, s, ctx=None):
         u = stripType(value)
         if u <> []:
             putType(target, [Bind(u, target)])
-            return (ext(getId(target), [Bind(u, target)], env), s)
+            return (ext(getId(target), map(lambda x: Bind(x, target), u), env), s)
         else:
             return (env, s)
 
@@ -497,22 +519,18 @@ def invoke1(call, clo, env, s, stk):
     # answer: should use call because we may have multiple calls to the same func
     # and recursion occurs only if we wind up in the same call before
 
-
     fromtype = maplist(lambda p: Pair(p.fst, stripType(p.snd)), pos)
 
-    if onStack(func, fromtype, stk):
+    if onStack(call, fromtype, stk):
         return ([Bind(bottomType, None)], s)
 
-    stk = ext(func, fromtype, stk)
+    stk = ext(call, fromtype, stk)
     fenv = append(pos, fenv)
     (to, s) = infer(func.body, fenv, s, stk)
     totype = stripType(to)
     putType(func, FuncType(reverse(fromtype), totype))
     return ([Bind(totype, call)], s)
 
-
-def stripType(t):
-    return union(map(lambda b: b.typ, t))
 
 
 def invoke(call, env, s, stk):
@@ -525,25 +543,6 @@ def invoke(call, env, s, stk):
     # currently we return the last state
     # need to consider bundling the state into the union of types
     return (totypes, s)
-
-
-
-
-def hasType(t, u):
-    for t2, loc in u:
-        if t == t2:
-            return True
-    return False
-
-
-
-def removeType(t, u):
-    ret = []
-    for t2, loc in u:
-        if t2 <> t:
-            ret.append(Bind(t2, loc))
-    return ret
-
 
 
 
