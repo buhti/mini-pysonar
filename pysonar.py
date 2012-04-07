@@ -67,49 +67,22 @@ def isDef(node):
 
 
 
+
 ##################################################################
 # per-node information store
 ##################################################################
-class Error:
-    def __init__(self, exp, msg):
-        self.exp = exp
-        self.msg = msg
-    def __repr__(self):
-        return "Error:" + str(self.exp) + '"' + str(self.msg) + '"'
-
-
-locations = {}
-def putLocation(exp, item, kind):
-    if locations.has_key(exp):
-        types = locations[exp]
+history = {}
+def putType(exp, item):
+    if history.has_key(exp):
+        seen = history[exp]
     else:
-        types = []
-
-    locations[exp] = union([types, item])
-
-
-
-def getLocation(exp):
-    return locations[exp]
-
-
-
-def putType(exp, type):
-    putLocation(exp, type, 'type')
-
+        seen = []
+    history[exp] = union([seen, item])
 
 
 def getType(exp):
-    if locations.has_key(exp):
-        (types, errs) = getLocation(exp)
-        return types
-    else:
-        return None
+    return history[exp]
 
-
-def putError(exp, err):
-    putLocation(exp, err, 'type')
-    return (err, exp)
 
 
 
@@ -140,7 +113,7 @@ class PrimType(Type):
     def __init__(self, name):
         self.name = name
     def __repr__(self):
-        return "pm:" + str(self.name)
+        return str(self.name)
     def __eq__(self, other):
         if IS(other, PrimType):
             return self.name == other.name
@@ -294,7 +267,6 @@ def subtypeBindings(rec1, rec2):
 
 
 def union(bds):
-#    print "union:", bds, "loc:", inloc
     u = []
     locs = []
     for bd in bds:
@@ -410,18 +382,18 @@ def bind(target, value, env, ctx=None):
                     env = bind(target.elts[i], value.elts[i], env, ctx)
                 return env
             elif len(target.elts) < len(value.elts):
-                putError(ctx, ValueError('too many values to unpack',
+                putType(ctx, ValueError('too many values to unpack',
                                              target, value))
                 return env
             else:
-                putError(ctx, ValueError('too few values to unpack',
+                putType(ctx, ValueError('too few values to unpack',
                                             target, value))
                 return env
         else:
-            putError(ctx, TypeError('non-iterable object', value))
+            putType(ctx, TypeError('non-iterable object', value))
             return env
     else:
-        putError(ctx, SyntaxError("can't assign to ", target))
+        putType(ctx, SyntaxError("can't assign to ", target))
         return env
 
 
@@ -449,7 +421,7 @@ def invoke1(call, clo, env, stk):
         for k in call.keywords:
             t2 = infer(k.value, env, stk)
         err = TypeError('calling non-callable', clo, call.func, call.args)
-        putError(call, err)
+        putType(call, err)
         return [Bind(err, call)]
 
     func = clo.func
@@ -470,7 +442,7 @@ def invoke1(call, clo, env, stk):
         if func.args.vararg == None:
             err = TypeError('excess arguments to function',
                             len(call.args), call.func, call.args)
-            putError(call, err)
+            putType(call, err)
             return [Bind(err, call)]
         else:
             varg = []
@@ -486,7 +458,7 @@ def invoke1(call, clo, env, stk):
         vt = infer(k.value, env, stk)
         tloc1 = lookup(k.arg, pos)
         if tloc1 <> None:
-            putError(call, TypeError('multiple values for keyword argument',
+            putType(call, TypeError('multiple values for keyword argument',
                                      k.arg, loc))
         elif k.arg not in ids:
             kwarg = bind(k.arg, vt, kwarg, call)
@@ -500,7 +472,7 @@ def invoke1(call, clo, env, stk):
             pos = bind(func.args.kwarg, [Bind(DictType(reverse(kwarg)), call)],
                        pos, call)
         else:
-            putError(call, TypeError("unexpected keyword arguements", kwarg))
+            putType(call, TypeError("unexpected keyword arguements", kwarg))
     elif func.args.kwarg <> None:
         pos = bind(func.args.kwarg, [Bind(DictType(nil), call)], pos, call)
 
@@ -513,11 +485,6 @@ def invoke1(call, clo, env, stk):
         if t == None:
             pos = bind(func.args.args[i], clo.defaults[j], pos, call)
             i += 1
-
-    # Check if we are back to the same call and the same types.
-    # need to rethink whether to use func or call..
-    # answer: should use call because we may have multiple calls to the same func
-    # and recursion occurs only if we wind up in the same call before
 
     fromtype = maplist(lambda p: Pair(p.fst, stripType(p.snd)), pos)
 
@@ -598,8 +565,8 @@ def inferSeq(exp, env, stk):
         t1 = infer(e.value, env, stk)
         (t2, env2) = inferSeq(exp[1:], env, stk)
         for e2 in exp[1:]:
-            err = Error('unreachable code', e2)
-            putError(e2, err)
+            err = TypeError('unreachable code', e2)
+            putType(e2, err)
         return (t1, env)
 
     elif IS(e, Expr):
@@ -612,17 +579,16 @@ def inferSeq(exp, env, stk):
 
 
 
-
 env0 = nil
-s0   = nil
 
 def infer(exp, env, stk):
 
     #    print 'infering:', exp
 
     if IS(exp, list):
-        (t, env) = inferSeq(exp, env, stk)
-        return t    # ignores env (this is inside body)
+        # env ignored because output scope
+        (t, ignoreEnv) = inferSeq(exp, env, stk)
+        return t    
 
     elif IS(exp, Num):
         return [Bind(PrimType(type(exp.n)), exp)]
@@ -630,36 +596,44 @@ def infer(exp, env, stk):
     elif IS(exp, Str):
         return [Bind(PrimType(type(exp.s)), exp)]
 
-    elif IS(exp, List):
-        eltTypes = []
-        for e in exp.elts:
-            t = infer(e, env, stk)
-            eltTypes.append(t)
-        return [Bind(ListType(eltTypes), exp)]
-
-    elif IS(exp, Tuple):
-        eltTypes = []
-        for e in exp.elts:
-            t = infer(e, env, stk)
-            eltTypes.append(t)
-        return [Bind(TupleType(eltTypes), exp)]
-
     elif IS(exp, Name):
-        bds = lookup(exp.id, env)
-        if bds == None:
-            try:
-                prim = type(eval(exp.id))
-                return [Bind(PrimType(prim), None)]
-            except NameError as e:
-                err = e
-                putError(exp, err)
-                return [Bind(err, exp)]
+        b = lookup(exp.id, env)
+        if (b <> None):
+            putType(exp, b)
+            return b
         else:
-            putType(exp, bds)
-            return bds
+            try:                        # use Python's help
+                t = type(eval(exp.id))
+                return [Bind(PrimType(t), None)]
+            except NameError as err:
+                putType(exp, err)
+                return [Bind(err, exp)]
+
+    elif IS(exp, Lambda):
+        clo = Closure(exp, env)
+        for d in exp.args.defaults:
+            dt = infer(d, env, stk)
+            clo.defaults.append(dt)
+        return [Bind(clo, exp)]
 
     elif IS(exp, Call):
         return invoke(exp, env, stk)
+
+    ## ignore complex types for now    
+    # elif IS(exp, List):
+    #     eltTypes = []
+    #     for e in exp.elts:
+    #         t = infer(e, env, stk)
+    #         eltTypes.append(t)
+    #     return [Bind(ListType(eltTypes), exp)]
+
+    # elif IS(exp, Tuple):
+    #     eltTypes = []
+    #     for e in exp.elts:
+    #         t = infer(e, env, stk)
+    #         eltTypes.append(t)
+    #     return [Bind(TupleType(eltTypes), exp)]
+
 
     elif IS(exp, Module):
         return infer(exp.body, env, stk)
@@ -684,7 +658,7 @@ def parseFile(filename):
 
 # clean up globals
 def clear():
-    locations.clear()
+    history.clear()
     global unknown_counter
     unknown_counter = 0
 
@@ -700,10 +674,10 @@ def nodekey(node):
 def son(exp):
     clear()
     ret = infer(exp, env0, nil)
-    if locations.keys() <> []:
-        print "---------------------------- locations ----------------------------"
-        for k in sorted(locations.keys(), key=nodekey):
-            print k, ":", locations[k]
+    if history.keys() <> []:
+        print "---------------------------- history ----------------------------"
+        for k in sorted(history.keys(), key=nodekey):
+            print k, ":", history[k]
         print "\n"
 
 
@@ -812,4 +786,8 @@ def installPrinter():
             obj.__repr__ = printAst
 
 installPrinter()
+
+
+
+sonar('tests/chain.py')
 
