@@ -1,8 +1,8 @@
-This is a preliminary prototype implementation of PySonar, a "deep
-static analyzer" for Python. It has similar (but improved) structure
-as the one I made at Google, but has a very preliminary status. It has
-only the core parts (variables, functions and calls), but lacks many
-important things such as objects, modules etc.
+This is a prototype implementation of PySonar, a "deep static
+analyzer" for Python. It has a similar structure as the one I made at
+Google, but has a very preliminary status. It has only the core parts
+(variables, functions and calls), but lacks many important things such
+as objects, modules etc.
 
 You can find an introduction to the original Google version at:
 
