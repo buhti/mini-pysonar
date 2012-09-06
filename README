@@ -24,6 +24,5 @@ efficient but some variables can't be resolved.
 
 I currently have no motivation of developing PySonar further. The
 purpose of putting this version of PySonar here is for pedagogical
-purposes - to show how to implement a static analyzer by using
-abstract interpretation, which infers types even for a "dynamic
-language".
+purposes - to help people understand how to implement a static
+analyzer by using abstract interpretation.
