@@ -23,6 +23,5 @@ but this version doesn't do inter-procedural analysis. It is more
 efficient but some variables can't be resolved.
 
 I currently have no motivation of developing PySonar further. The
-purpose of putting this version of PySonar here is for pedagogical
-purposes - to help people understand how to implement a static
-analyzer by using abstract interpretation.
+purpose of putting this version here is to help people understand how
+to implement a static analyzer by using abstract interpretation.
