@@ -22,9 +22,8 @@ It has the same abstract interpreter structure as the second version,
 but this version doesn't do inter-procedural analysis. It is more
 efficient but some variables can't be resolved.
 
-I currently have no motivation of developing PySonar further. I would
-focus most of my efforts developing new languages and other systems.
-The purpose of putting this version of PySonar here is for pedagogical
+I currently have no motivation of developing PySonar further. The
+purpose of putting this version of PySonar here is for pedagogical
 purposes - to show how to implement a static analyzer by using
 abstract interpretation, which infers types even for a "dynamic
 language".
