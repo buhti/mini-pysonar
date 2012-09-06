@@ -21,7 +21,8 @@ efficient but some variables can't be resolved.
 
 I currently have no motivation of developing PySonar further because I
 think Python is an over-engineered language, and is unnecessarily
-difficult to analyze :-P I would focus most of my efforts developing a
-new language. The purpose of putting this version of PySonar here is
-to show how to implement a static analyzer by using abstract
-interpretation, which infers types even for a "dynamic language".
+difficult to analyze :-P I would focus most of my efforts developing
+new languages and other systems. The purpose of putting this version
+of PySonar here is to show how to implement a static analyzer by using
+abstract interpretation, which infers types even for a "dynamic
+language".
