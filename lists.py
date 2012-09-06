@@ -60,6 +60,11 @@ class Pair:
         else:
             return self.fst == other.fst and self.snd == other.snd
 
+def first(p):
+    return p.fst
+
+def rest(p):
+    return p.snd
 
 
 def loner(u):
@@ -123,18 +128,6 @@ def filterlist(f, ls):
     return reverse(ret)
 
 
-# def append(*lists):
-#     ret = nil
-#     i = 0
-#     while i < len(lists):
-#         ls = lists[i]
-#         while ls <> nil:
-#             ret = Pair(ls.fst, ret)
-#             ls = ls.snd
-#         i += 1
-#     return ret
-
-
 def append(*lists):    
     def append1(ls1, ls2):
         ret = ls2
@@ -146,7 +139,7 @@ def append(*lists):
 
 def assq(x, s):
     for p in s:
-        if x == p.fst:
+        if x == first(p):
             return p
     return None
 
@@ -154,9 +147,9 @@ def assq(x, s):
 def ziplist(ls1, ls2):
     ret = nil
     while ls1 <> nil and ls2 <> nil:
-        ret = Pair(Pair(ls1.fst, ls2.fst), ret)
-        ls1 = ls1.snd
-        ls2 = ls2.snd
+        ret = Pair(Pair(first(ls1), first(ls2)), ret)
+        ls1 = rest(ls1)
+        ls2 = rest(ls2)
     return reverse(ret)
 
 
@@ -168,7 +161,7 @@ def ext(x, v, s):
 def lookup(x, s):
     p = assq(x, s)
     if p <> None:
-        return p.snd
+        return rest(p)
     else:
         return None
 

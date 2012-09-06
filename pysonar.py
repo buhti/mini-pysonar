@@ -72,7 +72,7 @@ def isDef(node):
 # per-node information store
 ##################################################################
 history = {}
-def putType(exp, item):
+def putInfo(exp, item):
     if history.has_key(exp):
         seen = history[exp]
     else:
@@ -80,7 +80,7 @@ def putType(exp, item):
     history[exp] = union([seen, item])
 
 
-def getType(exp):
+def getInfo(exp):
     return history[exp]
 
 
@@ -94,15 +94,15 @@ class Type:
 
 
 
-unknown_counter = 0
+nUnknown = 0
 class UnknownType(Type):
     def __init__(self, name=None):
-        global unknown_counter
+        global nUnknown
         if name <> None:
-            self.name = name + str(unknown_counter)
+            self.name = name + str(nUnknown)
         else:
-            self.name = '_' + str(unknown_counter)
-        unknown_counter += 1
+            self.name = '_' + str(nUnknown)
+        nUnknown += 1
     def __repr__(self):
         return str(self.name)
 
@@ -165,7 +165,7 @@ class Closure(Type):
         self.env = env
         self.defaults = []
     def __repr__(self):
-        return "clo:" + str(self.func)
+        return str(self.func)
 
 
 
@@ -230,6 +230,16 @@ class DictType(Type):
         return not self.__eq__(other)
 
 
+
+class UnionType(Type):
+    def __init__(self, elts):
+        self.elts = elts
+    def __repr__(self):
+        return "U:" + str(self.elts)
+
+
+
+
 # singleton primtive types
 contType = PrimType('cont')
 bottomType = PrimType('_|_')
@@ -255,7 +265,7 @@ def subtypeBindings(rec1, rec2):
 #    print "subtypeBindings:", rec1, rec2
     def find(a, rec2):
         for b in rec2:
-            if a.fst == b.fst and typeEqual(a.snd, b.snd):
+            if (first(a) == first(b)) and typeEqual(rest(a), rest(b)):
                 return True
         return False
     for a in rec1:
@@ -266,17 +276,16 @@ def subtypeBindings(rec1, rec2):
 
 
 
-def union(bds):
+def union(ts):
     u = []
-    locs = []
-    for bd in bds:
-        if IS(bd, list):                 # already a union (list)
-            for b in bd:
+    for t in ts:
+        if IS(t, list):                 # already a union (list)
+            for b in t:
                 if b not in u:
                     u.append(b)
         else:
-            if bd not in u:
-                u.append(bd)
+            if t not in u:
+                u.append(t)
     return u
 
 
@@ -291,7 +300,7 @@ class Bind:
         self.typ = typ
         self.loc = loc
     def __repr__(self):
-        return "B:" + str(self.typ) + "=" + str(self.loc)
+        return "(" + str(self.typ) + " <~~ " + str(self.loc) + ")"
     def __iter__(self):
         return BindIterator(self)
     def __eq__(self, other):
@@ -317,14 +326,13 @@ class BindIterator:
 
 
 
-
-def stripType(t):
-    return union(map(lambda b: b.typ, t))
+def typeOnly(bs):
+    return union(bs)
 
 
 
 def hasType(t, u):
-    for t2, loc in u:
+    for t2 in u:
         if t == t2:
             return True
     return False
@@ -332,29 +340,25 @@ def hasType(t, u):
 
 
 def removeType(t, u):
-    ret = []
-    for t2, loc in u:
-        if t2 <> t:
-            ret.append(Bind(t2, loc))
-    return ret
-
+    return filter(lambda x: x <> t, u)
 
 
 
 # combine two environments, make unions when necessary
 # only assocs appear in both envs are preserved
+# use a variable bound in only one branch will cause type error
 def mergeEnv(env1, env2):
     ret = nil
     for p1 in env1:
-        p2 = assq(p1.fst, env2)
+        p2 = assq(first(p1), env2)
         if p2 <> None:
-            ret = ext(p1.fst, union([p1.snd, p2.snd]), ret)
+            ret = ext(first(p1), union([rest(p1), rest(p2)]), ret)
     return ret
 
 
 
 # compare both str's and Name's for equivalence, because
-# keywords are str's (bad design of the parser)
+# keywords are str's (bad design of the ast)
 def getId(x):
     if IS(x, Name):
         return x.id
@@ -363,37 +367,30 @@ def getId(x):
 
 
 
-# ctx : for error reporting only
-def bind(target, value, env, ctx=None):
-#    print "bind:", target, value
-
+def bind(target, value, env):
     if IS(target, Name) or IS(target, str):
-        u = stripType(value)
-        if u <> []:
-            putType(target, [Bind(u, target)])
-            return ext(getId(target), map(lambda x: Bind(x, target), u), env)
-        else:
-            return env
+        u = value
+        putInfo(target, u)
+        return ext(getId(target), u, env)
 
-    elif IS(target, Tuple) or IS(target, List):
-        if IS(value, TupleType) or IS(target, List):
-            if len(target.elts) == len(value.elts):
-                for i in xrange(len(value.elts)):
-                    env = bind(target.elts[i], value.elts[i], env, ctx)
-                return env
-            elif len(target.elts) < len(value.elts):
-                putType(ctx, ValueError('too many values to unpack',
-                                             target, value))
-                return env
-            else:
-                putType(ctx, ValueError('too few values to unpack',
-                                            target, value))
-                return env
-        else:
-            putType(ctx, TypeError('non-iterable object', value))
-            return env
+    # ignored for now
+    # elif IS(target, Tuple) or IS(target, List):
+    #     if IS(value, TupleType) or IS(value, List):
+    #         if len(target.elts) == len(value.elts):
+    #             for i in xrange(len(value.elts)):
+    #                 env = bind(target.elts[i], value.elts[i], env)
+    #             return env
+    #         elif len(target.elts) < len(value.elts):
+    #             putInfo(target, ValueError('too many values to unpack'))
+    #             return env
+    #         else:
+    #             putInfo(target, ValueError('too few values to unpack'))
+    #             return env
+    #     else:
+    #         putInfo(value, TypeError('non-iterable object'))
+    #         return env
     else:
-        putType(ctx, SyntaxError("can't assign to ", target))
+        putInfo(target, SyntaxError("not assignable"))
         return env
 
 
@@ -401,8 +398,8 @@ def bind(target, value, env, ctx=None):
 
 def onStack(call, args, stk):
     for p1 in stk:
-        call2 = p1.fst
-        args2 = p1.snd
+        call2 = first(p1)
+        args2 = rest(p1)
         if call == call2 and subtypeBindings(args, args2):
             return True
     return False
@@ -410,8 +407,11 @@ def onStack(call, args, stk):
 
 
 
-# invoke ONE closure in the union (list)
+# invoke one closure in the union
 def invoke1(call, clo, env, stk):
+
+    if (clo == bottomType):
+        return [bottomType]
 
     # Even if operator is not a closure, resolve the
     # arguments for partial information.
@@ -420,9 +420,9 @@ def invoke1(call, clo, env, stk):
             t1 = infer(a, env, stk)
         for k in call.keywords:
             t2 = infer(k.value, env, stk)
-        err = TypeError('calling non-callable', clo, call.func, call.args)
-        putType(call, err)
-        return [Bind(err, call)]
+        err = TypeError('calling non-callable', clo)
+        putInfo(call, err)
+        return [err]
 
     func = clo.func
     fenv = clo.env
@@ -433,145 +433,162 @@ def invoke1(call, clo, env, stk):
     poslen = min(len(func.args.args), len(call.args))
     for i in xrange(poslen):
         t = infer(call.args[i], env, stk)
-        pos = bind(func.args.args[i], t, pos, call)
+        pos = bind(func.args.args[i], t, pos)
 
 
     # put extra positionals into vararg if provided
     # report error and go on otherwise
     if len(call.args) > len(func.args.args):
         if func.args.vararg == None:
-            err = TypeError('excess arguments to function',
-                            len(call.args), call.func, call.args)
-            putType(call, err)
-            return [Bind(err, call)]
+            err = TypeError('excess arguments to function')
+            putInfo(call, err)
+            return [err]
         else:
-            varg = []
+            ts = []
             for i in xrange(len(func.args.args), len(call.args)):
                 t = infer(call.args[i], env, stk)
-                varg = varg + t
-            pos = bind(func.args.vararg, varg, pos, call)
+                ts = ts + t
+            pos = bind(func.args.vararg, ts, pos)
 
 
     # bind keywords, collect kwarg
     ids = map(getId, func.args.args)
     for k in call.keywords:
-        vt = infer(k.value, env, stk)
+        ts = infer(k.value, env, stk)
         tloc1 = lookup(k.arg, pos)
         if tloc1 <> None:
-            putType(call, TypeError('multiple values for keyword argument',
+            putInfo(call, TypeError('multiple values for keyword argument',
                                      k.arg, loc))
         elif k.arg not in ids:
-            kwarg = bind(k.arg, vt, kwarg, call)
+            kwarg = bind(k.arg, ts, kwarg)
         else:
-            pos = bind(k.arg, vt, pos, call)
+            pos = bind(k.arg, ts, pos)
 
 
     # put extras in kwarg or report them
     if kwarg <> nil:
         if func.args.kwarg <> None:
-            pos = bind(func.args.kwarg, [Bind(DictType(reverse(kwarg)), call)],
-                       pos, call)
+            pos = bind(func.args.kwarg,
+                       DictType(reverse(kwarg)),
+                       pos)
         else:
-            putType(call, TypeError("unexpected keyword arguements", kwarg))
+            putInfo(call, TypeError("unexpected keyword arguements", kwarg))
     elif func.args.kwarg <> None:
-        pos = bind(func.args.kwarg, [Bind(DictType(nil), call)], pos, call)
+        pos = bind(func.args.kwarg, DictType(nil), pos)
 
 
     # bind defaults, avoid overwriting bound vars
     i = len(func.args.args) - len(func.args.defaults)
     ndefaults = len(func.args.args)
     for j in xrange(len(clo.defaults)):
-        t, loc = lookup(getId(func.args.args[i]), pos)
-        if t == None:
-            pos = bind(func.args.args[i], clo.defaults[j], pos, call)
+        tloc = lookup(getId(func.args.args[i]), pos)
+        if tloc == None:
+            pos = bind(func.args.args[i], clo.defaults[j], pos)
             i += 1
 
-    fromtype = maplist(lambda p: Pair(p.fst, stripType(p.snd)), pos)
+    # finish building the input type
+    fromtype = maplist(lambda p: Pair(first(p), typeOnly(rest(p))), pos)
 
+    # check whether the same call is on stack with same input types
     if onStack(call, fromtype, stk):
-        return [Bind(bottomType, None)]
+        return [bottomType]
 
     stk = ext(call, fromtype, stk)
     fenv = append(pos, fenv)
     to = infer(func.body, fenv, stk)
-    totype = stripType(to)
-    putType(func, FuncType(reverse(fromtype), totype))
-    return [Bind(totype, call)]
+    putInfo(func, FuncType(reverse(fromtype), to))
+    return to
 
 
 
 def invoke(call, env, stk):
     clos = infer(call.func, env, stk)
     totypes = []
-    for clo, loc in clos:
-        t2 = invoke1(call, clo, env, stk)
-        totypes = totypes + t2
-
-    # currently we return the last state
-    # need to consider bundling the state into the union of types
+    for clo in clos:
+        t = invoke1(call, clo, env, stk)
+        totypes = totypes + t
     return totypes
 
 
 
+
+# pre-bind names to functions in sequences (should add classes later)
+def close(ls, env):
+    for e in ls:
+        if IS(e, FunctionDef):
+            c = Closure(e, None)
+            env = ext(e.name, [c], env)
+    return env
+
+
+def terminate(t):
+    return not hasType(contType, t)
+
+
+def finalize(t):
+    return removeType(contType, t)
+
+
 def inferSeq(exp, env, stk):
+
     if exp == []:                       # reached end without return
-        return ([Bind(contType, None)], env)
+        return ([contType], env)
 
     e = exp[0]
 
     if IS(e, If):
         tt = infer(e.test, env, stk)
-        (t1, env1) = inferSeq(e.body, env, stk)
-        (t2, env2) = inferSeq(e.orelse, env, stk)
+        (t1, env1) = inferSeq(e.body, close(e.body, env), stk)
+        (t2, env2) = inferSeq(e.orelse, close(e.orelse, env), stk)
 
-        if not hasType(contType, t1) and not hasType(contType, t2):
-            # both terminates
-            (t3, env3) = inferSeq(exp[1:], env, stk)
+        print 't1:', t1, terminate(t1), ', t2:', t2, terminate(t2), removeType(bottomType, t2)
+
+        if terminate(t1) and terminate(t2):    # both terminates
+            for e2 in exp[1:]:
+                putInfo(e2, TypeError('unreachable code'))
             return (union([t1, t2]), env)
 
-        elif not hasType(contType, t1):          # t1 terminates
+        elif terminate(t1) and not terminate(t2):     # t1 terminates
             (t3, env3) = inferSeq(exp[1:], env2, stk)
-            t2 = removeType(contType, t2)
+            t2 = finalize(t2)            
             return (union([t1, t2, t3]), env3)
 
-        elif not hasType(contType, t2):          # t2 terminates
+        elif not terminate(t1) and terminate(t2):             # t2 terminates
             (t3, env3) = inferSeq(exp[1:], env1, stk)
-            t1 = removeType(contType, t1)
+            t1 = finalize(t1)
             return (union([t1, t2, t3]), env3)
-
-        else:                                    # both non-terminating
+        else:                           # both non-terminating
             (t3, env3) = inferSeq(exp[1:], mergeEnv(env1, env2), stk)
-            t1 = removeType(contType, t1)
-            t2 = removeType(contType, t2)
+            t1 = finalize(t1)
+            t2 = finalize(t2)
             return (union([t1, t2, t3]), env3)
 
     elif IS(e, Assign):
         t = infer(e.value, env, stk)
-        for target in e.targets:
-            env = bind(target, t, env, e)
-        env = ext(e, Bind(contType, e), env)
+        for x in e.targets:
+            env = bind(x, t, env)
         return inferSeq(exp[1:], env, stk)
 
     elif IS(e, FunctionDef):
-        clo = Closure(e, None)
-        env = ext(e.name, [Bind(clo, e)], env)
-        clo.env = env                   # create circular env
+        cs = lookup(e.name, env)
+        for c in cs:
+            c.env = env                   # create circular env
+
         for d in e.args.defaults:
             dt = infer(d, env, stk)
-            clo.defaults.append(dt)
-        return inferSeq(exp[1:], env, stk)        
+            c.defaults.append(dt)
+        return inferSeq(exp[1:], env, stk)
 
     elif IS(e, Return):
         t1 = infer(e.value, env, stk)
         (t2, env2) = inferSeq(exp[1:], env, stk)
-        for e2 in exp[1:]:
-            err = TypeError('unreachable code', e2)
-            putType(e2, err)
+        for e2 in exp[1:] :
+            putInfo(e2, TypeError('unreachable code'))
         return (t1, env)
 
     elif IS(e, Expr):
         t1 = infer(e.value, env, stk)
-        return inferSeq(exp[1:], env, stk)        
+        return inferSeq(exp[1:], env, stk)
 
     else:
         raise TypeError('recognized node in effect context', e)
@@ -579,47 +596,47 @@ def inferSeq(exp, env, stk):
 
 
 
-env0 = nil
-
 def infer(exp, env, stk):
 
-    #    print 'infering:', exp
+    if IS(exp, Module):
+        return infer(exp.body, env, stk)
 
-    if IS(exp, list):
-        # env ignored because output scope
+    elif IS(exp, list):
+        env = close(exp, env)
+        # env ignored because out of scope
         (t, ignoreEnv) = inferSeq(exp, env, stk)
-        return t    
+        return t
 
     elif IS(exp, Num):
-        return [Bind(PrimType(type(exp.n)), exp)]
+        return [PrimType(type(exp.n))]
 
     elif IS(exp, Str):
-        return [Bind(PrimType(type(exp.s)), exp)]
+        return [PrimType(type(exp.s))]
 
     elif IS(exp, Name):
         b = lookup(exp.id, env)
         if (b <> None):
-            putType(exp, b)
+            putInfo(exp, b)
             return b
         else:
-            try:                        # use Python's help
+            try:                    # use information from Python interp
                 t = type(eval(exp.id))
-                return [Bind(PrimType(t), None)]
+                return [PrimType(t)]
             except NameError as err:
-                putType(exp, err)
-                return [Bind(err, exp)]
+                putInfo(exp, err)
+                return [err]
 
     elif IS(exp, Lambda):
-        clo = Closure(exp, env)
+        c = Closure(exp, env)
         for d in exp.args.defaults:
             dt = infer(d, env, stk)
-            clo.defaults.append(dt)
-        return [Bind(clo, exp)]
+            c.defaults.append(dt)
+        return [c]
 
     elif IS(exp, Call):
         return invoke(exp, env, stk)
 
-    ## ignore complex types for now    
+    ## ignore complex types for now
     # elif IS(exp, List):
     #     eltTypes = []
     #     for e in exp.elts:
@@ -635,11 +652,8 @@ def infer(exp, env, stk):
     #     return [Bind(TupleType(eltTypes), exp)]
 
 
-    elif IS(exp, Module):
-        return infer(exp.body, env, stk)
-
     else:
-        return [Bind(UnknownType(), exp)]
+        return [UnknownType()]
 
 
 
@@ -659,8 +673,8 @@ def parseFile(filename):
 # clean up globals
 def clear():
     history.clear()
-    global unknown_counter
-    unknown_counter = 0
+    global nUnknown
+    nUnknown = 0
 
 
 def nodekey(node):
@@ -673,7 +687,7 @@ def nodekey(node):
 # check a single (parsed) expression
 def son(exp):
     clear()
-    ret = infer(exp, env0, nil)
+    ret = infer(exp, nil, nil)
     if history.keys() <> []:
         print "---------------------------- history ----------------------------"
         for k in sorted(history.keys(), key=nodekey):
@@ -787,7 +801,4 @@ def installPrinter():
 
 installPrinter()
 
-
-
 sonar('tests/chain.py')
-
