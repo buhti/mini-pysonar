@@ -1,8 +1,8 @@
 This is a preliminary prototype implementation of PySonar, a "deep
 static analyzer" for Python. It has similar (but improved) structure
-as the one I made at Google (implemented in Java), but has a very
-preliminary status. It has only the core parts (variable, function and
-calls), but lacks many important things such as objects, modules etc.
+as the one I made at Google, but has a very preliminary status. It has
+only the core parts (variables, functions and calls), but lacks many
+important things such as objects, modules etc.
 
 You can find an introduction to the original Google version at:
 
@@ -22,10 +22,9 @@ It has the same abstract interpreter structure as the second version,
 but this version doesn't do inter-procedural analysis. It is more
 efficient but some variables can't be resolved.
 
-I currently have no motivation of developing PySonar further because I
-think Python is an over-engineered language, and is unnecessarily
-difficult to analyze :-P I would focus most of my efforts developing
-new languages and other systems. The purpose of putting this version
-of PySonar here is to show how to implement a static analyzer by using
+I currently have no motivation of developing PySonar further. I would
+focus most of my efforts developing new languages and other systems.
+The purpose of putting this version of PySonar here is for pedagogical
+purposes - to show how to implement a static analyzer by using
 abstract interpretation, which infers types even for a "dynamic
 language".
